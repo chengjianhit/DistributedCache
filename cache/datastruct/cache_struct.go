@@ -21,6 +21,10 @@ type Value interface {
 	Len() int
 }
 
+func (c *Cache) Len() (size int) {
+	return c.ll.Len()
+}
+
 func NewCache(maxSize int64, onEnvicted func(string, Value)) *Cache {
 	return &Cache{
 		maxSize:   maxSize,
