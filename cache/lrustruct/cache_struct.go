@@ -1,8 +1,15 @@
-package datastruct
+package lrustruct
 
 import (
 	"container/list"
+	"sync"
 )
+
+type CacheFacade struct {
+	mu         sync.Mutex
+	lru        *Cache
+	cacheBytes int64
+}
 
 type Cache struct {
 	maxSize   int64      //最大内存
@@ -34,6 +41,29 @@ func NewCache(maxSize int64, onEnvicted func(string, Value)) *Cache {
 	}
 }
 
+func (cacheFacade *CacheFacade) add(key string, value BaseStore) {
+	cacheFacade.mu.Lock()
+	defer cacheFacade.mu.Unlock()
+	//初始化延迟
+	if cacheFacade.lru == nil {
+		cacheFacade.lru = NewCache(cacheFacade.cacheBytes, nil)
+	}
+	cacheFacade.lru.Set(key, value)
+}
+
+func (cacheFacade *CacheFacade) getValue(key string) (value BaseStore, ok bool) {
+	cacheFacade.mu.Lock()
+	if cacheFacade.lru == nil {
+		return
+	}
+
+	if v, succ := cacheFacade.lru.Get(key); succ {
+		return v.(BaseStore), succ
+	}
+
+	return
+}
+
 func (c *Cache) Set(key string, value Value) {
 	if existedVal, ok := c.cacheMap[key]; ok {
 		c.ll.MoveToFront(existedVal) //最新访问的ele，放到队列头部
@@ -46,7 +76,7 @@ func (c *Cache) Set(key string, value Value) {
 		c.usedSize += int64(len(key)) + int64(value.Len())
 	}
 
-	for c.maxSize != 0 && c.maxSize < c.usedSize {
+	for c.maxSize != -1 && c.maxSize < c.usedSize {
 		c.RemoveOldest()
 	}
 }
